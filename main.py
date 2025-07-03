@@ -129,3 +129,9 @@ async def webhook(request: Request):
 
     app.add_handler(conv_handler)
     app.run_polling()
+import requests
+
+WEBHOOK_URL = "https://your-render-url.onrender.com/webhook"
+set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}"
+requests.get(set_webhook_url)
+await bot.bot.set_webhook(WEBHOOK_URL)
