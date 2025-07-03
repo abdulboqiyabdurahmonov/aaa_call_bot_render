@@ -94,6 +94,22 @@ if __name__ == "__main__":
             COMMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_comment)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Я получил твоё сообщение.")
+
+def main():
+    app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
+    
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
+
     )
 
     app.add_handler(conv_handler)
