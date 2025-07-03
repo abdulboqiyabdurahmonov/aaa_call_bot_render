@@ -47,4 +47,18 @@ def main():
 
 if __name__ == "__main__":
     main()
+    from telegram import Update
+from telegram.ext import CommandHandler, CallbackContext
+
+def help_command(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text(
+        "🆘 *Команды бота:*\n"
+        "/start — начать диалог\n"
+        "/help — справка по использованию\n"
+        "Просто напиши данные — и бот примет заявку ✉️",
+        parse_mode="Markdown"
+    )
+
+dispatcher.add_handler(CommandHandler("help", help_command))
+
 
