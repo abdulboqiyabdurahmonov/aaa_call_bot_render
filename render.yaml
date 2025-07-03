@@ -1,9 +1,8 @@
 services:
-  - type: worker
-    name: aaa-call-bot
+  - type: web
+    name: triplea-bot-webhook
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
-
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn bot:app --host 0.0.0.0 --port 10000"
 
