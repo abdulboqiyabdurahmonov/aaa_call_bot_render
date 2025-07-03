@@ -43,6 +43,14 @@ def main():
 
     print("Бот запущен...")
     app.run_polling()
+        manager_chat_id = os.getenv(\"MANAGER_CHAT_ID\")
+    message = f\"📥 Новая заявка\\n\\n👤 Имя: {context.user_data['name']}\\n📞 Телефон: {context.user_data['phone']}\"
+
+    try:
+        await context.bot.send_message(chat_id=manager_chat_id, text=message)
+    except Exception as e:
+        print(\"Ошибка при отправке менеджеру:\", e)
+
 
 
 if __name__ == "__main__":
