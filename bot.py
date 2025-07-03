@@ -1,120 +1,103 @@
 
-import logging
 import os
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-    ConversationHandler,
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-# Загрузка переменных окружения
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-MANAGER_CHAT_ID = os.getenv("MANAGER_CHAT_ID")
+BOT_TOKEN = os.getenv("7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho")
+OWNER_ID = os.getenv("349680069")
+MANAGER_CHAT_ID = os.getenv("557891018")
+PORT = int(os.environ.get("PORT", 10000))
+HOSTNAME = os.getenv("aaa_call_bot_rende")
 
-# Логирование
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+TYPING_NAME, TYPING_PHONE, TYPING_COMPANY, CHOOSING_PLAN = range(4)
 
-# Состояния
-ASK_NAME, ASK_PHONE, ASK_COMPANY, ASK_TARIFF = range(4)
-
-# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["Оставить заявку", "Связаться с менеджером"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "Привет! 👋\nВыберите, что хотите сделать:", reply_markup=reply_markup
+        "Привет! 👋\nВыберите, что хотите сделать:",
+        reply_markup=reply_markup
     )
 
-# Обработка текста
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    if text == "Оставить заявку":
-        await update.message.reply_text("Пожалуйста, напишите ваше ФИО:")
-        return ASK_NAME
-
-    elif text == "Связаться с менеджером":
+    if text == "Связаться с менеджером":
         await update.message.reply_text("Наш менеджер свяжется с вами в ближайшее время.")
         return ConversationHandler.END
-
+    elif text == "Оставить заявку":
+        await update.message.reply_text("Пожалуйста, напишите ваше ФИО:")
+        return TYPING_NAME
     else:
         await update.message.reply_text("Пожалуйста, выберите действие с помощью кнопок.")
         return ConversationHandler.END
 
-# Сбор информации
-async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Действие отменено. Введите /start, чтобы начать заново.")
+    return ConversationHandler.END
+
+async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await start(update, context)
+
+async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["name"] = update.message.text
-    await update.message.reply_text("Спасибо! Теперь введите ваш номер телефона:")
-    return ASK_PHONE
+    await update.message.reply_text("Введите номер телефона:")
+    return TYPING_PHONE
 
-async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["phone"] = update.message.text
-    await update.message.reply_text("Укажите название вашей компании:")
-    return ASK_COMPANY
+    await update.message.reply_text("Введите название вашей компании:")
+    return TYPING_COMPANY
 
-async def ask_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["company"] = update.message.text
-    await update.message.reply_text(
-        "📑 Тарифы:
-"
-        "1. Старт — До 1 000 звонков в месяц, 1 сценарий, поддержка в Telegram, быстрый запуск.
-"
-        "2. Бизнес — До 10 000 звонков, 5 сценариев, аналитика, интеграция с ботом.
-"
-        "3. Корпоративный — До 100 000 звонков, неограниченные сценарии, API/CRM, персональный менеджер.
-"
-        "Введите интересующий тариф (Старт / Бизнес / Корпоративный):"
-    )
-    return ASK_TARIFF
+    reply_markup = ReplyKeyboardMarkup([["Старт", "Бизнес", "Корпоративный"]], resize_keyboard=True)
+    await update.message.reply_text("Выберите интересующий тариф:", reply_markup=reply_markup)
+    return CHOOSING_PLAN
 
-async def ask_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["tariff"] = update.message.text
-    user = update.effective_user
+async def handle_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    plan = update.message.text
+    context.user_data["plan"] = plan
+    data = context.user_data
 
-    message = (
-        f"📥 Новая заявка от @{user.username or 'Без ника'} (ID: {user.id}):\n"
-        f"👤 ФИО: {context.user_data['name']}\n"
-        f"📞 Телефон: {context.user_data['phone']}\n"
-        f"🏢 Компания: {context.user_data['company']}\n"
-        f"📦 Тариф: {context.user_data['tariff']}"
-    )
+    tariff_info = {
+        "Старт": "До 1 000 звонков в месяц\n1 голосовой сценарий\nПоддержка в Telegram\nБыстрый запуск\n900 000 сум / мес",
+        "Бизнес": "До 10 000 звонков в месяц\nДо 5 сценариев\nПоддержка и аналитика\nИнтеграция с Telegram-ботом\n8 100 000 сум / мес",
+        "Корпоративный": "До 100 000 звонков в месяц\nНеограниченные сценарии\nAPI-интеграция, CRM\nПерсональный менеджер\n72 900 000 сум / мес"
+    }
 
-    await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=message)
+    msg = f"\U0001F4E5 Новая заявка:\n\U0001F464 ФИО: {data['name']}\n\U0001F4DE Телефон: {data['phone']}\n\U0001F3E2 Компания: {data['company']}\n\U0001F4E6 Тариф: {plan}\n\U0001F4C4 Подробности: {tariff_info.get(plan, 'Неизвестный тариф')}"
+    await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=msg)
     await update.message.reply_text("Спасибо, ваша заявка отправлена менеджеру.")
     return ConversationHandler.END
 
-# Отмена и назад
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Действие отменено.")
-    return ConversationHandler.END
-
-# Главная функция
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)],
+        entry_points=[MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text)],
         states={
-            ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_name)],
-            ASK_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
-            ASK_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_company)],
-            ASK_TARIFF: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_tariff)],
+            TYPING_NAME: [MessageHandler(filters.TEXT & (~filters.COMMAND), handle_name)],
+            TYPING_PHONE: [MessageHandler(filters.TEXT & (~filters.COMMAND), handle_phone)],
+            TYPING_COMPANY: [MessageHandler(filters.TEXT & (~filters.COMMAND), handle_company)],
+            CHOOSING_PLAN: [MessageHandler(filters.TEXT & (~filters.COMMAND), handle_plan)],
         },
-        fallbacks=[CommandHandler("отменить", cancel), CommandHandler("назад", start)],
+        fallbacks=[
+            CommandHandler("отменить", cancel),
+            CommandHandler("назад", back),
+            CommandHandler("start", start)
+        ],
     )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("назад", start))
-    app.add_handler(CommandHandler("отменить", cancel))
 
-    app.run_polling()
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"https://{HOSTNAME}/"
+    )
 
 if __name__ == "__main__":
     main()
+
