@@ -116,9 +116,9 @@ def main():
 
     # Команды
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("отменить", cancel))
-    app.add_handler(CommandHandler("назад", back))
-    app.add_handler(conv_handler)
+app.add_handler(CommandHandler("cancel", cancel))
+app.add_handler(CommandHandler("back", back))
+
 
     print("Бот запущен...")
     app.run_polling()
