@@ -58,3 +58,11 @@ if __name__ == "__main__":
 
     print("Бот запущен...")
     app.run_polling()
+    from telegram import ReplyKeyboardMarkup
+
+reply_markup = ReplyKeyboardMarkup(
+    [['📝 Оставить заявку', '📞 Связаться с менеджером']],
+    resize_keyboard=True
+)
+update.message.reply_text("Выберите действие:", reply_markup=reply_markup)
+
