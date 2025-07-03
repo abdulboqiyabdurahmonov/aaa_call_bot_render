@@ -1,57 +1,43 @@
+import logging
 import os
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from dotenv import load_dotenv
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = os.getenv("OWNER_ID")
+MANAGER_CHAT_ID = os.getenv("MANAGER_CHAT_ID")
 
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Я бот TRIPLEA. Я могу принимать заявки и помогать с обратной связью.\n\n"
-        "Напиши /help, чтобы узнать, что я умею."
-    )
+    await update.message.reply_text("Привет! Отправь мне сообщение, и я передам его менеджеру.")
 
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
 
-# Команда /help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🆘 *Команды бота:*\n"
-        "/start — начать диалог\n"
-        "/help — справка по использованию\n"
-        "Просто напиши данные — и бот примет заявку ✉️",
-        parse_mode="Markdown"
-    )
+    user = update.message.from_user
+    text = update.message.text
 
+    message = f"📩 Новое сообщение от @{user.username or user.first_name} (ID: {user.id}):\n{text}"
+    if MANAGER_CHAT_ID:
+        await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=message)
+    else:
+        await update.message.reply_text("Ошибка: не задан MANAGER_CHAT_ID.")
 
-# Ответ на обычный текст
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Я получил твоё сообщение! Скоро с тобой свяжется менеджер.")
+    await update.message.reply_text("Спасибо, ваше сообщение отправлено менеджеру.")
 
+if __name__ == "__main__":
+    if not BOT_TOKEN:
+        raise ValueError("Не задан BOT_TOKEN в переменных среды")
 
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Хэндлеры команд
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-
-    # Хэндлер текстовых сообщений
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Бот запущен...")
     app.run_polling()
-        manager_chat_id = os.getenv(\"MANAGER_CHAT_ID\")
-    message = f\"📥 Новая заявка\\n\\n👤 Имя: {context.user_data['name']}\\n📞 Телефон: {context.user_data['phone']}\"
-
-    try:
-        await context.bot.send_message(chat_id=manager_chat_id, text=message)
-    except Exception as e:
-        print(\"Ошибка при отправке менеджеру:\", e)
-
-
-
-if __name__ == "__main__":
-    main()
