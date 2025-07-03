@@ -109,6 +109,21 @@ def main():
 
 if __name__ == "__main__":
     main()
+    from fastapi import FastAPI, Request
+import uvicorn
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+
+app = FastAPI()
+bot = ApplicationBuilder().token(BOT_TOKEN).build()
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, bot.bot)
+    await bot.process_update(update)
+    return {"status": "ok"}
+
 
     )
 
