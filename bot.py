@@ -8,7 +8,7 @@ from telegram.ext import (
 )
 
 TOKEN = "7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho"
-GROUP_ID = -100xxxxxxxxxxxx  # <-- сюда вставь ID своей Telegram-группы
+GROUP_ID = -1002344973979  # <-- сюда вставь ID своей Telegram-группы
 
 logging.basicConfig(level=logging.INFO)
 
