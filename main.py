@@ -1,137 +1,127 @@
-import logging
 import os
-import re
-from telegram import Update, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    ConversationHandler, ContextTypes, filters
+    ApplicationBuilder, CommandHandler,
+    MessageHandler, ContextTypes, filters,
+    ConversationHandler
 )
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Шаги
-NAME, PHONE, EMAIL, LANGUAGE, COMMENT = range(5)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")  # сюда укажешь ID группы или лички
 
-# Авторизация Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("google_credentials.json", scope)
-client = gspread.authorize(creds)
-sheet = client.open("TRIPLEA Заявки").sheet1
+# Состояния для разговора
+FIO, PHONE, COMPANY, TARIFF = range(4)
 
-# Telegram ID владельца
-OWNER_ID = int(os.getenv("OWNER_ID"))
+# Главное меню
+main_keyboard = ReplyKeyboardMarkup(
+    [["Оставить заявку", "Связаться с менеджером"]],
+    resize_keyboard=True
+)
 
 # Старт
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Как тебя зовут?")
-    return NAME
+    await update.message.reply_text(
+        "👋 Привет! Я бот TRIPLEA.\n\n"
+        "Я помогу тебе оставить заявку или связаться с менеджером.",
+        reply_markup=main_keyboard
+    )
 
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["name"] = update.message.text
-    await update.message.reply_text("Укажи номер телефона:")
+# Help
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "/start — начать\n"
+        "/help — помощь\n"
+        "/cancel — отмена\n"
+        "/chatid — узнать ID чата"
+    )
+
+# /chatid — узнать ID
+async def chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(f"🔍 Chat ID: `{chat_id}`", parse_mode="Markdown")
+
+# Начинаем сбор заявки
+async def start_application(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Пожалуйста, введи своё ФИО:")
+    return FIO
+
+async def get_fio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["fio"] = update.message.text
+    await update.message.reply_text("Теперь номер телефона:")
     return PHONE
 
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    phone = update.message.text
-    if not re.match(r"^\+?\d{9,15}$", phone):
-        await update.message.reply_text("Некорректный номер. Попробуй ещё раз:")
-        return PHONE
-    context.user_data["phone"] = phone
-    await update.message.reply_text("Email (необязательно):")
-    return EMAIL
+    context.user_data["phone"] = update.message.text
+    await update.message.reply_text("Как называется ваша компания?")
+    return COMPANY
 
-async def get_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["email"] = update.message.text
-    await update.message.reply_text("На каком языке общаться? (Русский/Узбекский):")
-    return LANGUAGE
+async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["company"] = update.message.text
+    await update.message.reply_text(
+        "Выберите интересующий тариф: старт, бизнес или корпоративный"
+    )
+    return TARIFF
 
-async def get_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["language"] = update.message.text
-    await update.message.reply_text("Оставь комментарий или нажми Enter для пропуска:")
-    return COMMENT
+async def get_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["tariff"] = update.message.text
 
-async def get_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["comment"] = update.message.text
-    data = context.user_data
-    date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Отправка в таблицу
-    sheet.append_row([
-        date,
-        data["name"],
-        data["phone"],
-        data["email"],
-        data["language"],
-        data["comment"]
-    ])
-
-    # Отправка владельцу
-    text = f"Новая заявка:\nИмя: {data['name']}\nТелефон: {data['phone']}\nEmail: {data['email']}\nЯзык: {data['language']}\nКомментарий: {data['comment']}"
-    await context.bot.send_message(chat_id=OWNER_ID, text=text)
-
-    await update.message.reply_text("Спасибо! Мы с вами свяжемся.", reply_markup=ReplyKeyboardRemove())
-    return ConversationHandler.END
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Операция отменена.", reply_markup=ReplyKeyboardRemove())
-    return ConversationHandler.END
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
-
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_email)],
-            LANGUAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_language)],
-            COMMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_comment)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я получил твоё сообщение.")
-
-def main():
-    app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
-    
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
-    from fastapi import FastAPI, Request
-import uvicorn
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
-
-app = FastAPI()
-bot = ApplicationBuilder().token(BOT_TOKEN).build()
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    data = await request.json()
-    update = Update.de_json(data, bot.bot)
-    await bot.process_update(update)
-    return {"status": "ok"}
-
-
+    text = (
+        "📥 Новая заявка\n\n"
+        f"👤 ФИО: {context.user_data['fio']}\n"
+        f"📞 Телефон: {context.user_data['phone']}\n"
+        f"🏢 Компания: {context.user_data['company']}\n"
+        f"💼 Тариф: {context.user_data['tariff']}"
     )
 
-    app.add_handler(conv_handler)
-    app.run_polling()
-import requests
+    await update.message.reply_text("Спасибо! Ваша заявка отправлена менеджеру.")
 
-WEBHOOK_URL = "https://your-render-url.onrender.com/webhook"
-set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}"
-requests.get(set_webhook_url)
-await bot.bot.set_webhook(WEBHOOK_URL)
+    # Отправка админу
+    if ADMIN_CHAT_ID:
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+    else:
+        await update.message.reply_text("❗ ADMIN_CHAT_ID не указан.")
+
+    return ConversationHandler.END
+
+# Отмена
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚫 Заявка отменена.", reply_markup=main_keyboard)
+    return ConversationHandler.END
+
+# Меню
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.lower()
+    if "заявку" in text:
+        return await start_application(update, context)
+    elif "менеджером" in text:
+        await update.message.reply_text("Скоро с вами свяжется наш менеджер 👨‍💼")
+    else:
+        await update.message.reply_text("Выберите действие в меню ⬇")
+
+# Сборка
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+conv_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex("^(Оставить заявку)$"), start_application)],
+    states={
+        FIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_fio)],
+        PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
+        COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
+        TARIFF: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_tariff)],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+)
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("help", help_command))
+app.add_handler(CommandHandler("cancel", cancel))
+app.add_handler(CommandHandler("chatid", chat_id_command))
+app.add_handler(conv_handler)
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+print("✅ Бот запущен...")
+app.run_polling()
+
