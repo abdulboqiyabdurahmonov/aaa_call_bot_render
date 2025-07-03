@@ -101,8 +101,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    git add bot.py
-git commit -m "Switch to webhook version"
-git push
+    
 
 
