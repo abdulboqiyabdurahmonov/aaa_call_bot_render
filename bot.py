@@ -65,4 +65,8 @@ reply_markup = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 update.message.reply_text("Выберите действие:", reply_markup=reply_markup)
+elif message.text == "Связаться с менеджером":
+    await update.message.reply_text(
+        "Наш менеджер свяжется с вами в ближайшее время."
+    )
 
