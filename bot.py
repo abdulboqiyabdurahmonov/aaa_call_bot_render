@@ -1,88 +1,120 @@
+
 import logging
 import os
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, ConversationHandler
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+    ConversationHandler,
+)
 
-# Загружаем переменные окружения
+# Загрузка переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MANAGER_CHAT_ID = os.getenv("MANAGER_CHAT_ID")
 
 # Логирование
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# Этапы собрания данных
-FIO, PHONE, COMPANY, TARIFF = range(4)
+# Состояния
+ASK_NAME, ASK_PHONE, ASK_COMPANY, ASK_TARIFF = range(4)
 
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["Оставить заявку", "Связаться с менеджером"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "👋 Привет!\nВыберите, что хотите сделать:",
-        reply_markup=reply_markup
+        "Привет! 👋\nВыберите, что хотите сделать:", reply_markup=reply_markup
     )
 
-async def contact_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("\u041d\u0430\u0448 \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440 \u0441\u0432\u044f\u0436\u0435\u0442\u0441\u044f \u0441 \u0432\u0430\u043c\u0438 \u0432 \u0431\u043b\u0438\u0436\u0430\u0439\u0448\u0435\u0435 \u0432\u0440\u0435\u043c\u044f.")
+# Обработка текста
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
 
-async def start_application(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if text == "Оставить заявку":
+        await update.message.reply_text("Пожалуйста, напишите ваше ФИО:")
+        return ASK_NAME
+
+    elif text == "Связаться с менеджером":
+        await update.message.reply_text("Наш менеджер свяжется с вами в ближайшее время.")
+        return ConversationHandler.END
+
+    else:
+        await update.message.reply_text("Пожалуйста, выберите действие с помощью кнопок.")
+        return ConversationHandler.END
+
+# Сбор информации
+async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["name"] = update.message.text
+    await update.message.reply_text("Спасибо! Теперь введите ваш номер телефона:")
+    return ASK_PHONE
+
+async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["phone"] = update.message.text
+    await update.message.reply_text("Укажите название вашей компании:")
+    return ASK_COMPANY
+
+async def ask_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["company"] = update.message.text
     await update.message.reply_text(
-        "📅 Пожалуйста, напишите своё ФИО:")
-    return FIO
-
-async def get_fio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['fio'] = update.message.text
-    await update.message.reply_text("📱 Теперь ваш номер телефона:")
-    return PHONE
-
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['phone'] = update.message.text
-    await update.message.reply_text("🏢 Ваша компания:")
-    return COMPANY
-
-async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['company'] = update.message.text
-    await update.message.reply_text("📈 Тариф: \n1. Старт \n2. Бизнес \n3. Корпоративный\n
-💬 Выберите один из тарифов:")
-    return TARIFF
-
-async def get_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['tariff'] = update.message.text
-    text = (
-        f"📢 Новая заявка:\n"
-        f"👤 ФИО: {context.user_data['fio']}\n"
-        f"📱 Телефон: {context.user_data['phone']}\n"
-        f"🏢 Компания: {context.user_data['company']}\n"
-        f"📈 Тариф: {context.user_data['tariff']}"
+        "📑 Тарифы:
+"
+        "1. Старт — До 1 000 звонков в месяц, 1 сценарий, поддержка в Telegram, быстрый запуск.
+"
+        "2. Бизнес — До 10 000 звонков, 5 сценариев, аналитика, интеграция с ботом.
+"
+        "3. Корпоративный — До 100 000 звонков, неограниченные сценарии, API/CRM, персональный менеджер.
+"
+        "Введите интересующий тариф (Старт / Бизнес / Корпоративный):"
     )
-    await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=text)
-    await update.message.reply_text("Спасибо! Ваша заявка отправлена менеджеру.")
+    return ASK_TARIFF
+
+async def ask_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["tariff"] = update.message.text
+    user = update.effective_user
+
+    message = (
+        f"📥 Новая заявка от @{user.username or 'Без ника'} (ID: {user.id}):\n"
+        f"👤 ФИО: {context.user_data['name']}\n"
+        f"📞 Телефон: {context.user_data['phone']}\n"
+        f"🏢 Компания: {context.user_data['company']}\n"
+        f"📦 Тариф: {context.user_data['tariff']}"
+    )
+
+    await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=message)
+    await update.message.reply_text("Спасибо, ваша заявка отправлена менеджеру.")
     return ConversationHandler.END
 
+# Отмена и назад
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Заявка отменена.")
+    await update.message.reply_text("Действие отменено.")
     return ConversationHandler.END
 
-if __name__ == '__main__':
+# Главная функция
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^\О\с\т\а\в\и\т\ь \з\а\я\в\к\у$"), start_application)],
+        entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)],
         states={
-            FIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_fio)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
-            TARIFF: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_tariff)],
+            ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_name)],
+            ASK_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
+            ASK_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_company)],
+            ASK_TARIFF: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_tariff)],
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("отменить", cancel), CommandHandler("назад", start)]
+        fallbacks=[CommandHandler("отменить", cancel), CommandHandler("назад", start)],
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("отменить", cancel))
-    app.add_handler(CommandHandler("назад", start))
-    app.add_handler(MessageHandler(filters.Regex("^\С\в\я\з\а\т\ь\с\я \с \м\е\н\е\д\ж\е\р\о\м$"), contact_manager))
     app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("назад", start))
+    app.add_handler(CommandHandler("отменить", cancel))
 
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
