@@ -42,4 +42,24 @@ if __name__ == "__main__":
     print("Бот запущен...")
     app.run_polling()
     from telegram import ReplyKeyboardMarkup
+    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [["Оставить заявку", "Связаться с менеджером"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    await update.message.reply_text(
+        "Привет! 👋\nВыберите, что хотите сделать:",
+        reply_markup=reply_markup
+    )
+    async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text == "Оставить заявку":
+        await update.message.reply_text("Пожалуйста, напишите ваше имя, телефон и email.")
+    elif text == "Связаться с менеджером":
+        manager_chat_id = os.getenv("MANAGER_CHAT_ID")
+        await update.message.reply_text(f"Менеджер свяжется с вами. Или напишите напрямую: @{manager_chat_id}")
+    else:
+        await update.message.reply_text("Я получил твоё сообщение! Скоро с тобой свяжется менеджер.")
+
+
 
