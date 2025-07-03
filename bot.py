@@ -1,72 +1,84 @@
 import logging
 import os
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, ConversationHandler
 
 # Загружаем переменные окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MANAGER_CHAT_ID = os.getenv("MANAGER_CHAT_ID")
 
-# Логирование
+# Включаем логирование
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+
+# Этапы разговора
+(ASK_NAME, ASK_PHONE, ASK_COMPANY, ASK_TARIFF) = range(4)
 
 # Команда /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["Оставить заявку", "Связаться с менеджером"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Привет! 👋\nПожалуйста, укажите ваше полное имя:")
+    return ASK_NAME
 
-    await update.message.reply_text(
-        "Привет! 👋\nВыберите, что хотите сделать:",
-        reply_markup=reply_markup
+# Получение имени
+async def ask_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["name"] = update.message.text
+    await update.message.reply_text("Спасибо! Теперь введите номер телефона:")
+    return ASK_PHONE
+
+# Получение телефона
+async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["phone"] = update.message.text
+    await update.message.reply_text("Отлично! Введите название вашей компании:")
+    return ASK_COMPANY
+
+# Получение компании
+async def ask_company(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["company"] = update.message.text
+
+    keyboard = [["Старт", "Бизнес", "Корпоративный"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text("Какой тариф вас интересует?", reply_markup=reply_markup)
+    return ASK_TARIFF
+
+# Получение тарифа и отправка менеджеру
+async def ask_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["tariff"] = update.message.text
+
+    user_data = context.user_data
+    message = (
+        "📩 Новая заявка:\n"
+        f"👤 Имя: {user_data['name']}\n"
+        f"📞 Телефон: {user_data['phone']}\n"
+        f"🏢 Компания: {user_data['company']}\n"
+        f"💼 Тариф: {user_data['tariff']}"
     )
 
-# Обработка кнопок и сообщений
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
+    await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=message)
+    await update.message.reply_text("Спасибо! Ваша заявка отправлена менеджеру ✅", reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
 
-    text = update.message.text
-    user = update.message.from_user
+# Обработка отмены
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Операция отменена.", reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
 
-    if text == "Оставить заявку":
-        await update.message.reply_text("Пожалуйста, напишите ваше имя, телефон и email.")
-    elif text == "Связаться с менеджером":
-        if MANAGER_CHAT_ID:
-            await update.message.reply_text(f"Наш менеджер свяжется с вами в ближайшее время.\n"
-                                            f"Вы также можете написать ему напрямую: @{MANAGER_CHAT_ID}")
-        else:
-            await update.message.reply_text("Ошибка: не задан MANAGER_CHAT_ID.")
-    else:
-        # Отправка заявки менеджеру
-        message = f"📩 Новое сообщение от @{user.username or user.first_name} (ID: {user.id}):\n{text}"
-        if MANAGER_CHAT_ID:
-            await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=message)
-        await update.message.reply_text("Спасибо, ваше сообщение отправлено менеджеру.")
-
-# Запуск бота
 if __name__ == "__main__":
-    if not BOT_TOKEN:
-        raise ValueError("Не задан BOT_TOKEN в переменных среды")
-
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-    print("Бот запущен...")
-    app.run_polling()
-    from telegram import ReplyKeyboardMarkup
-
-reply_markup = ReplyKeyboardMarkup(
-    [['📝 Оставить заявку', '📞 Связаться с менеджером']],
-    resize_keyboard=True
-)
-update.message.reply_text("Выберите действие:", reply_markup=reply_markup)
-elif message.text == "Связаться с менеджером":
-    await update.message.reply_text(
-        "Наш менеджер свяжется с вами в ближайшее время."
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_name)],
+            ASK_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
+            ASK_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_company)],
+            ASK_TARIFF: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_tariff)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
+    app.add_handler(conv_handler)
+    app.run_polling()
+
+
+ 
