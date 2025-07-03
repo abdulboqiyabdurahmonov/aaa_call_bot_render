@@ -1,10 +1,9 @@
 import os
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from dotenv import load_dotenv
 
 load_dotenv()
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 
@@ -19,10 +18,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Команда /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Вот что я умею:\n"
-        "/start – Начать работу\n"
-        "/help – Показать это сообщение\n"
-        "Просто напиши мне, и я подскажу, что делать дальше!"
+        "🆘 *Команды бота:*\n"
+        "/start — начать диалог\n"
+        "/help — справка по использованию\n"
+        "Просто напиши данные — и бот примет заявку ✉️",
+        parse_mode="Markdown"
     )
 
 
@@ -47,18 +47,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    from telegram import Update
-from telegram.ext import CommandHandler, CallbackContext
-
-def help_command(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(
-        "🆘 *Команды бота:*\n"
-        "/start — начать диалог\n"
-        "/help — справка по использованию\n"
-        "Просто напиши данные — и бот примет заявку ✉️",
-        parse_mode="Markdown"
-    )
-
-dispatcher.add_handler(CommandHandler("help", help_command))
-
-
