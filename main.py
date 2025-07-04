@@ -17,9 +17,14 @@ async def telegram_webhook(request: Request):
     data = await request.json()
 
     if "message" in data:
-        message = data["message"]
-        chat_id = message["chat"]["id"]
-        text = message.get("text", "")
+    message = data["message"]
+    
+    # Игнорировать группы и каналы
+    if message["chat"]["type"] != "private":
+        return {"ok": True}
+    
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
 
         if text == "/start":
             await send_message(chat_id, "Привет! Давайте оформим заявку.\n\nКак вас зовут?")
