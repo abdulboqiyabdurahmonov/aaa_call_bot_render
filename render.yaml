@@ -7,5 +7,5 @@ services:
     startCommand: python main.py
     envVars:
       - key: BOT_TOKEN
-        sync: false  # Значение токена задай вручную в Render → Environment
+        sync: false
     autoDeploy: true
