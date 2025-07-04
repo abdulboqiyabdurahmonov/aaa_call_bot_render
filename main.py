@@ -8,7 +8,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = os.getenv("GROUP_ID")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# Простая память (слетает при перезапуске, но норм для старта)
 user_states = {}
 user_data = {}
 
@@ -17,14 +16,14 @@ async def telegram_webhook(request: Request):
     data = await request.json()
 
     if "message" in data:
-    message = data["message"]
-    
-    # Игнорировать группы и каналы
-    if message["chat"]["type"] != "private":
-        return {"ok": True}
-    
-    chat_id = message["chat"]["id"]
-    text = message.get("text", "")
+        message = data["message"]
+
+        # Игнорируем группы
+        if message["chat"]["type"] != "private":
+            return {"ok": True}
+
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
 
         if text == "/start":
             await send_message(chat_id, "Привет! Давайте оформим заявку.\n\nКак вас зовут?")
@@ -38,13 +37,11 @@ async def telegram_webhook(request: Request):
         chat_id = callback["from"]["id"]
         tariff = callback["data"]
         user_data[chat_id]["tariff"] = tariff
-        await send_message(chat_id, "Спасибо! Ваша заявка отправлена ✅")
 
-        # Отправка заявки в группу
         msg = format_application(user_data[chat_id])
         await send_message(GROUP_ID, msg)
+        await send_message(chat_id, "Спасибо! Ваша заявка отправлена ✅")
 
-        # Очистка состояния
         user_states.pop(chat_id, None)
         user_data.pop(chat_id, None)
 
@@ -57,23 +54,26 @@ async def handle_step(chat_id, text):
         user_data[chat_id]["name"] = text
         user_states[chat_id] = "waiting_phone"
         await send_message(chat_id, "Введите номер телефона:")
+
     elif state == "waiting_phone":
         user_data[chat_id]["phone"] = text
         user_states[chat_id] = "waiting_company"
         await send_message(chat_id, "Введите название вашей компании:")
+
     elif state == "waiting_company":
         user_data[chat_id]["company"] = text
         user_states[chat_id] = "waiting_tariff"
         await send_tariff_buttons(chat_id)
+
     else:
         await send_message(chat_id, "Нажмите /start, чтобы начать заново.")
 
 async def send_tariff_buttons(chat_id):
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🟢 Старт", "callback_data": "Старт"}],
-            [{"text": "🔵 Бизнес", "callback_data": "Бизнес"}],
-            [{"text": "🔴 Корпоративный", "callback_data": "Корпоративный"}]
+            [{"text": "🟢 Старт — до 1 000 звонков", "callback_data": "Старт"}],
+            [{"text": "🔵 Бизнес — до 10 000 звонков", "callback_data": "Бизнес"}],
+            [{"text": "🔴 Корпоративный — до 100 000 звонков", "callback_data": "Корпоративный"}]
         ]
     }
 
@@ -87,10 +87,10 @@ async def send_tariff_buttons(chat_id):
 def format_application(data):
     return (
         "📥 *Новая заявка*\n\n"
-        f"👤 Имя: {data.get('name')}\n"
-        f"📞 Телефон: {data.get('phone')}\n"
-        f"🏢 Компания: {data.get('company')}\n"
-        f"📦 Тариф: {data.get('tariff')}"
+        f"👤 *Имя:* {data.get('name')}\n"
+        f"📞 *Телефон:* {data.get('phone')}\n"
+        f"🏢 *Компания:* {data.get('company')}\n"
+        f"📦 *Тариф:* {data.get('tariff')}"
     )
 
 async def send_message(chat_id, text):
