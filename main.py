@@ -114,3 +114,4 @@ def create_app():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     web.run_app(create_app(), port=8000)
+    fix: бот теперь реагирует на кнопки тарифов
