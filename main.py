@@ -1,8 +1,20 @@
+import logging
+import os
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
+
 API_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = -1002344973979
+
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"  # ← подставь точный Render-URL
+WEBHOOK_HOST = "https://triplea-telegram-bot.onrender.com"
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
@@ -22,12 +34,6 @@ tariff_keyboard = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
-
-@dp.message(F.command("start"))
-async def cmd_start(message: types.Message, state: FSMContext):
-    await state.clear()
-    await state.set_state(Form.fio)
-    await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
 
 @dp.message(F.text.lower().in_({"❌ отменить", "/отменить"}))
 async def cancel(message: types.Message, state: FSMContext):
@@ -67,13 +73,10 @@ async def process_company(message: types.Message, state: FSMContext):
     await state.set_state(Form.tariff)
     await message.answer("📊 Выберите тариф:", reply_markup=tariff_keyboard)
 
-@dp.message(Form.tariff, F.text.in_([
-    "📦 Старт — 750 сум/звонок",
-    "💼 Бизнес — 600 сум/звонок",
-    "🏢 Корпоративный — 450 сум/звонок"
-]))
+@dp.message(Form.tariff)
 async def process_tariff(message: types.Message, state: FSMContext):
-    await state.update_data(tariff=message.text)
+    tariff = message.text
+    await state.update_data(tariff=tariff)
     data = await state.get_data()
 
     text = (
@@ -88,11 +91,16 @@ async def process_tariff(message: types.Message, state: FSMContext):
     await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
     await state.clear()
 
-# Webhook
+@dp.message(F.command("start"))
+async def cmd_start(message: types.Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(Form.fio)
+    await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
+
+# --- Webhook setup ---
 async def on_startup(bot: Bot):
     webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET)
-    print(f"✅ Webhook установлен: {webhook_url}")
 
 def create_app():
     app = web.Application()
