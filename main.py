@@ -1,6 +1,6 @@
 import logging
 import os
-from aiogram import Bot, Dispatcher, F, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -11,10 +11,9 @@ from aiohttp import web
 
 API_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = -1002344973979
-
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-telegram-bot.onrender.com"
+WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
@@ -75,8 +74,7 @@ async def process_company(message: types.Message, state: FSMContext):
 
 @dp.message(Form.tariff)
 async def process_tariff(message: types.Message, state: FSMContext):
-    tariff = message.text
-    await state.update_data(tariff=tariff)
+    await state.update_data(tariff=message.text)
     data = await state.get_data()
 
     text = (
@@ -84,7 +82,7 @@ async def process_tariff(message: types.Message, state: FSMContext):
         f"👤 <b>ФИО:</b> {data['fio']}\n"
         f"📞 <b>Телефон:</b> {data['phone']}\n"
         f"🏢 <b>Компания:</b> {data['company']}\n"
-        f"📦 <b>Тариф:</b> {data['tariff']}"
+        f"📦 <b>Тариф:</b> {data['tariff']}\n"
     )
 
     await bot.send_message(chat_id=GROUP_ID, text=text)
@@ -97,7 +95,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(Form.fio)
     await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
 
-# ---- Webhook Setup ----
+# Webhook setup
 async def on_startup(bot: Bot):
     await bot.set_webhook(f"{WEBHOOK_HOST}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
 
@@ -109,4 +107,4 @@ def create_app():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    web.run_app(create_app(), port=10000)
+    web.run_app(create_app(), port=8000)
