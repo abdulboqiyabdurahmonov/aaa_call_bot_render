@@ -1,3 +1,4 @@
 fastapi
 uvicorn
 httpx
+aiogram==3.4.1
