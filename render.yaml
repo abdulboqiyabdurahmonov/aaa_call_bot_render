@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: triplea-telegram-bot
+    name: triplea-bot-web
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
