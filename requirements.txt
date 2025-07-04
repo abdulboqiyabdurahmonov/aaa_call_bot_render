@@ -3,4 +3,4 @@ uvicorn
 httpx
 aiogram==3.4.1
 aiohttp>=3.9
-pydantic<2.0  # aiogram 3.4.1 не дружит с pydantic 2.x
+pydantic<2.0
