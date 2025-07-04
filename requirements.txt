@@ -1,6 +1,2 @@
-fastapi
-uvicorn
-httpx
 aiogram==3.4.1
 aiohttp>=3.9
-pydantic<2.0
