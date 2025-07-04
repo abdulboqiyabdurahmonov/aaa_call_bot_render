@@ -88,10 +88,12 @@ async def contact_manager(message: types.Message):
 async def on_startup(app):
     await bot.set_webhook("https://triplea-bot-web.onrender.com/webhook")
 
-app = web.Application()
-dp.include_router(dp)
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
-app.on_startup.append(on_startup)
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return 'ok'
+
 
 if __name__ == "__main__":
     setup_application(app, dp, bot=bot)
