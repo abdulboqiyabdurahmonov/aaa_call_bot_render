@@ -14,7 +14,7 @@ GROUP_ID = -1002344973979
 
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
+WEBHOOK_HOST = "https://triplea-telegram-bot.onrender.com"
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
@@ -75,18 +75,16 @@ async def process_company(message: types.Message, state: FSMContext):
 
 @dp.message(Form.tariff)
 async def process_tariff(message: types.Message, state: FSMContext):
-    tariff = message.text
-    await state.update_data(tariff=tariff)
+    data = await state.update_data(tariff=message.text)
     data = await state.get_data()
 
     text = (
-        "📥 <b>Новая заявка из Telegram-бота</b>\n\n"
+        "<b>📥 Новая заявка из Telegram-бота</b>\n\n"
         f"👤 <b>ФИО:</b> {data['fio']}\n"
         f"📞 <b>Телефон:</b> {data['phone']}\n"
         f"🏢 <b>Компания:</b> {data['company']}\n"
         f"📦 <b>Тариф:</b> {data['tariff']}\n"
     )
-
     await bot.send_message(chat_id=GROUP_ID, text=text)
     await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
     await state.clear()
@@ -97,10 +95,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(Form.fio)
     await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
 
-# --- Webhook setup ---
+# --- Webhook server ---
 async def on_startup(bot: Bot):
-    webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-    await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET)
+    await bot.set_webhook(f"{WEBHOOK_HOST}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
 
 def create_app():
     app = web.Application()
