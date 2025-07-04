@@ -1,106 +1,56 @@
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from fastapi import FastAPI, Request
+import httpx
+import os
 
-# Константы этапов диалога
-NAME, PHONE, COMPANY, TARIFF = range(4)
+app = FastAPI()
 
-# ID вашей группы
-GROUP_ID = -1002344973979
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GROUP_ID = os.getenv("GROUP_ID")
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# Стартовая команда
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [['Оставить заявку', 'Связаться с менеджером']]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("Привет! 👋\nВыберите, что хотите сделать:", reply_markup=reply_markup)
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
 
-# Логика нажатий кнопок
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    if "callback_query" in data:
+        chat_id = data["callback_query"]["from"]["id"]
+        text = data["callback_query"]["data"]
+        await send_message(chat_id, f"Вы нажали: {text}")
+        return {"ok": True}
 
-    if text == 'Оставить заявку':
-        await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
-        return NAME
-    elif text == 'Связаться с менеджером':
-        await update.message.reply_text("Наш менеджер свяжется с вами в ближайшее время.")
-        return ConversationHandler.END
-    else:
-        await update.message.reply_text("Пожалуйста, выберите один из пунктов меню.")
-        return ConversationHandler.END
+    if "message" in data:
+        message = data["message"]
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
 
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['name'] = update.message.text
-    await update.message.reply_text("Введите номер телефона:")
-    return PHONE
+        if text == "/start":
+            await send_buttons(chat_id)
+        else:
+            await send_message(chat_id, "Нажмите /start, чтобы начать.")
+    return {"ok": True}
 
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['phone'] = update.message.text
-    await update.message.reply_text("Введите название вашей компании:")
-    return COMPANY
-
-async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['company'] = update.message.text
-    await update.message.reply_text("Выберите интересующий тариф:\n1. Старт\n2. Бизнес\n3. Корпоративный")
-    return TARIFF
-
-async def get_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['tariff'] = update.message.text
-
-    tariff_description = {
-        "Старт": "До 1 000 звонков в месяц\n1 голосовой сценарий\nПоддержка в Telegram\nБыстрый запуск\n💵 900 000 сум / мес",
-        "Бизнес": "До 10 000 звонков в месяц\nДо 5 сценариев\nПоддержка и аналитика\nИнтеграция с Telegram-ботом\n💵 8 100 000 сум / мес",
-        "Корпоративный": "До 100 000 звонков в месяц\nНеограниченные сценарии\nAPI-интеграция, CRM\nПерсональный менеджер\n💵 72 900 000 сум / мес"
+async def send_buttons(chat_id):
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "Оставить заявку", "callback_data": "Заявка"}],
+            [{"text": "Связаться с менеджером", "callback_data": "Менеджер"}]
+        ]
     }
 
-    name = context.user_data.get("name")
-    phone = context.user_data.get("phone")
-    company = context.user_data.get("company")
-    tariff = context.user_data.get("tariff")
+    async with httpx.AsyncClient() as client:
+        await client.post(f"{TELEGRAM_API}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": "Что вы хотите сделать?",
+            "reply_markup": keyboard
+        })
 
-    message = (
-        f"📥 Новая заявка\n\n"
-        f"👤 ФИО: {name}\n"
-        f"📞 Телефон: {phone}\n"
-        f"🏢 Компания: {company}\n"
-        f"📦 Тариф: {tariff}\n\n"
-        f"ℹ️ Подробнее о тарифе:\n{tariff_description.get(tariff, 'Информация не найдена')}"
-    )
+async def send_message(chat_id, text):
+    async with httpx.AsyncClient() as client:
+        await client.post(f"{TELEGRAM_API}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": text
+        })
 
-    await context.bot.send_message(chat_id=GROUP_ID, text=message)
-    await update.message.reply_text("Спасибо! Ваша заявка отправлена менеджеру.")
-    return ConversationHandler.END
-
-# Команда отмены
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Заявка отменена.")
-    return ConversationHandler.END
-
-# Команда назад
-async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Вы вернулись назад.")
-    return ConversationHandler.END
-
-# Запуск приложения
-app = ApplicationBuilder().token("7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho").build()
-
-conv_handler = ConversationHandler(
-    entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler)],
-    states={
-        NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-        PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-        COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
-        TARIFF: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_tariff)],
-    },
-    fallbacks=[CommandHandler("cancel", cancel), CommandHandler("back", back)],
-)
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("cancel", cancel))
-app.add_handler(CommandHandler("back", back))
-app.add_handler(conv_handler)
-
-# Запуск через Webhook
-app.run_webhook(
-    listen="0.0.0.0",
-    port=8080,
-    webhook_url="https://aaa-call-bot.onrender.com"  # Убедись, что эта ссылка активна!
-)
+@app.get("/")
+def root():
+    return {"status": "ok"}
