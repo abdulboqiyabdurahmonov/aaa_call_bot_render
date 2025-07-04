@@ -75,16 +75,18 @@ async def process_company(message: types.Message, state: FSMContext):
 
 @dp.message(Form.tariff)
 async def process_tariff(message: types.Message, state: FSMContext):
-    data = await state.update_data(tariff=message.text)
+    tariff = message.text
+    await state.update_data(tariff=tariff)
     data = await state.get_data()
 
     text = (
-        "<b>📥 Новая заявка из Telegram-бота</b>\n\n"
+        "📥 <b>Новая заявка из Telegram-бота</b>\n\n"
         f"👤 <b>ФИО:</b> {data['fio']}\n"
         f"📞 <b>Телефон:</b> {data['phone']}\n"
         f"🏢 <b>Компания:</b> {data['company']}\n"
-        f"📦 <b>Тариф:</b> {data['tariff']}\n"
+        f"📦 <b>Тариф:</b> {data['tariff']}"
     )
+
     await bot.send_message(chat_id=GROUP_ID, text=text)
     await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
     await state.clear()
@@ -95,7 +97,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.set_state(Form.fio)
     await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
 
-# --- Webhook server ---
+# ---- Webhook Setup ----
 async def on_startup(bot: Bot):
     await bot.set_webhook(f"{WEBHOOK_HOST}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
 
@@ -107,4 +109,4 @@ def create_app():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    web.run_app(create_app(), port=8000)
+    web.run_app(create_app(), port=10000)
