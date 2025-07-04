@@ -9,25 +9,21 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-# === Конфигурация ===
 API_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = -1002344973979
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"  # ← Убедись, что это твой реальный URL
+WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
 
-# === Инициализация ===
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
-# === Состояния ===
 class Form(StatesGroup):
     fio = State()
     phone = State()
     company = State()
     tariff = State()
 
-# === Клавиатура тарифов ===
 tariff_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📦 Старт — 750 сум/звонок")],
@@ -38,7 +34,6 @@ tariff_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# === Команды ===
 @dp.message(F.command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -65,7 +60,6 @@ async def go_back(message: types.Message, state: FSMContext):
     else:
         await message.answer("⏪ Назад недоступен.")
 
-# === Сбор данных ===
 @dp.message(Form.fio)
 async def process_fio(message: types.Message, state: FSMContext):
     await state.update_data(fio=message.text)
@@ -84,7 +78,11 @@ async def process_company(message: types.Message, state: FSMContext):
     await state.set_state(Form.tariff)
     await message.answer("📊 Выберите тариф:", reply_markup=tariff_keyboard)
 
-@dp.message(Form.tariff)
+@dp.message(Form.tariff, F.text.in_([
+    "📦 Старт — 750 сум/звонок",
+    "💼 Бизнес — 600 сум/звонок",
+    "🏢 Корпоративный — 450 сум/звонок"
+]))
 async def process_tariff(message: types.Message, state: FSMContext):
     await state.update_data(tariff=message.text)
     data = await state.get_data()
@@ -101,20 +99,18 @@ async def process_tariff(message: types.Message, state: FSMContext):
     await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
     await state.clear()
 
-# === Webhook — Установка ===
+# Webhook setup
 async def on_startup(bot: Bot):
     webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET)
     print(f"✅ Webhook установлен: {webhook_url}")
 
-# === AIOHTTP приложение ===
 def create_app():
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot, on_startup=on_startup)
     return app
 
-# === Запуск ===
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     web.run_app(create_app(), port=8000)
