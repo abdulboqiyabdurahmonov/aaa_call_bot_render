@@ -8,4 +8,3 @@ services:
     envVars:
       - key: BOT_TOKEN
         value: 7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho
-    autoDeploy: true
