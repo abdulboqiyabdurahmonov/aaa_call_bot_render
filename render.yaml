@@ -6,7 +6,6 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
-      - envVars:
-  - key: BOT_TOKEN
-    value: 7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho
-    sync: false
+      - key: BOT_TOKEN
+        sync: false  # Значение токена задай вручную в Render → Environment
+    autoDeploy: true
