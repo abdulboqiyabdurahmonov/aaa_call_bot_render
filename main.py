@@ -1,103 +1,98 @@
 import os
-import logging
-from aiogram import Bot, Dispatcher, F, types
-from aiogram.enums import ParseMode
+import asyncio
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = int(os.getenv("GROUP_ID", "-1002344973979"))
+GROUP_ID = os.getenv("GROUP_ID")
+API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(storage=MemoryStorage())
 
 class Form(StatesGroup):
-    fio = State()
+    name = State()
     phone = State()
     company = State()
     tariff = State()
 
-# Клавиатура тарифов с описанием
-tariff_keyboard = ReplyKeyboardMarkup(
+keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Старт")],
-        [KeyboardButton(text="Бизнес")],
-        [KeyboardButton(text="Корпоративный")]
+        [KeyboardButton(text="Оставить заявку")],
+        [KeyboardButton(text="Связаться с менеджером")]
     ],
-    resize_keyboard=True,
-    one_time_keyboard=True
+    resize_keyboard=True
 )
 
-tariff_descriptions = {
-    "Старт": "🔹 750 сум/звонок\nВключает: отчётность, аналитику, поддержку, базовые функции",
-    "Бизнес": "🔸 600 сум/звонок\nВключает: отчётность, аналитику, расширенные функции, поддержку",
-    "Корпоративный": "🔶 450 сум/звонок\nВключает: всё, что в Бизнес + приоритетное обслуживание и API"
-}
+tariff_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Старт (750 сум/звонок)")],
+        [KeyboardButton(text="Бизнес (600 сум/звонок)")],
+        [KeyboardButton(text="Корпоративный (450 сум/звонок до 100 000 звонков)")]
+    ],
+    resize_keyboard=True
+)
 
-@dp.message(F.text == "/start")
+@dp.message(commands=["start", "отменить", "назад"])
 async def start(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("👋 Добро пожаловать! Введите ваше <b>ФИО</b>:")
-    await state.set_state(Form.fio)
+    await message.answer("Добро пожаловать! Выберите действие:", reply_markup=keyboard)
 
-@dp.message(Form.fio)
-async def process_fio(message: types.Message, state: FSMContext):
-    await state.update_data(fio=message.text)
-    await message.answer("📞 Введите ваш <b>номер телефона</b>:")
+@dp.message(lambda msg: msg.text == "Оставить заявку")
+async def start_form(message: types.Message, state: FSMContext):
+    await message.answer("Введите ваше ФИО:")
+    await state.set_state(Form.name)
+
+@dp.message(Form.name)
+async def get_name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text)
+    await message.answer("Введите номер телефона:")
     await state.set_state(Form.phone)
 
 @dp.message(Form.phone)
-async def process_phone(message: types.Message, state: FSMContext):
+async def get_phone(message: types.Message, state: FSMContext):
     await state.update_data(phone=message.text)
-    await message.answer("🏢 Введите <b>название вашей компании</b>:")
+    await message.answer("Введите название компании:")
     await state.set_state(Form.company)
 
 @dp.message(Form.company)
-async def process_company(message: types.Message, state: FSMContext):
+async def get_company(message: types.Message, state: FSMContext):
     await state.update_data(company=message.text)
-    await message.answer("📊 Выберите <b>тариф</b>:", reply_markup=tariff_keyboard)
+    await message.answer("Выберите тариф:", reply_markup=tariff_keyboard)
     await state.set_state(Form.tariff)
 
 @dp.message(Form.tariff)
-async def process_tariff(message: types.Message, state: FSMContext):
-    tariff = message.text
-    if tariff not in tariff_descriptions:
-        await message.answer("❌ Пожалуйста, выберите тариф из списка.", reply_markup=tariff_keyboard)
-        return
-
-    await state.update_data(tariff=tariff)
+async def get_tariff(message: types.Message, state: FSMContext):
+    await state.update_data(tariff=message.text)
     data = await state.get_data()
-
     text = (
-        "📥 <b>Новая заявка</b>\n\n"
-        f"👤 Имя: {data['fio']}\n"
-        f"📞 Телефон: {data['phone']}\n"
-        f"🏢 Компания: {data['company']}\n"
-        f"💼 Тариф: {data['tariff']}\n"
-        f"ℹ️ Описание: {tariff_descriptions[tariff]}"
+        "<b>Заявка из Telegram-бота</b>\n\n"
+        f"<b>Имя:</b> {data['name']}\n"
+        f"<b>Телефон:</b> {data['phone']}\n"
+        f"<b>Компания:</b> {data['company']}\n"
+        f"<b>Тариф:</b> {data['tariff']}"
     )
-
-    await bot.send_message(GROUP_ID, text)
-    await message.answer("✅ Спасибо! Ваша заявка отправлена менеджеру.")
+    await bot.send_message(chat_id=GROUP_ID, text=text)
+    await message.answer("Спасибо! Ваша заявка отправлена!", reply_markup=keyboard)
     await state.clear()
 
-# Webhook и запуск
+@dp.message(lambda msg: msg.text == "Связаться с менеджером")
+async def contact_manager(message: types.Message):
+    await message.answer("Менеджер свяжется с вами в ближайшее время.")
+
 async def on_startup(app):
-    await bot.set_webhook(WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
+    await bot.set_webhook("https://triplea-bot-web.onrender.com/webhook")
 
 app = web.Application()
-dp.workflow_data["bot"] = bot
-setup_application(app, dp, bot=bot, secret_token=WEBHOOK_SECRET)
+dp.include_router(dp)
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
 app.on_startup.append(on_startup)
 
 if __name__ == "__main__":
-    web.run_app(app, host="0.0.0.0", port=10000)
+    setup_application(app, dp, bot=bot)
+    web.run_app(app, port=8080)
