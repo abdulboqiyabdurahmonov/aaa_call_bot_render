@@ -1,6 +1,6 @@
-import logging
 import os
-from aiogram import Bot, Dispatcher, types, F
+import logging
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -11,19 +11,22 @@ from aiohttp import web
 
 API_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = -1002344973979
+
+WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
+# States
 class Form(StatesGroup):
     fio = State()
     phone = State()
     company = State()
     tariff = State()
 
+# Клавиатура тарифов
 tariff_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📦 Старт — 750 сум/звонок")],
@@ -34,25 +37,11 @@ tariff_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-@dp.message(F.text.lower().in_({"❌ отменить", "/отменить"}))
-async def cancel(message: types.Message, state: FSMContext):
+@dp.message(F.command("start"))
+async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("🚫 Заявка отменена.", reply_markup=types.ReplyKeyboardRemove())
-
-@dp.message(F.text.lower().in_({"🔙 назад", "/назад"}))
-async def go_back(message: types.Message, state: FSMContext):
-    current = await state.get_state()
-    if current == Form.phone:
-        await state.set_state(Form.fio)
-        await message.answer("🔙 Введите ФИО:")
-    elif current == Form.company:
-        await state.set_state(Form.phone)
-        await message.answer("🔙 Введите номер телефона:")
-    elif current == Form.tariff:
-        await state.set_state(Form.company)
-        await message.answer("🔙 Введите название компании:")
-    else:
-        await message.answer("⏪ Назад недоступен.")
+    await state.set_state(Form.fio)
+    await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
 
 @dp.message(Form.fio)
 async def process_fio(message: types.Message, state: FSMContext):
@@ -74,7 +63,8 @@ async def process_company(message: types.Message, state: FSMContext):
 
 @dp.message(Form.tariff)
 async def process_tariff(message: types.Message, state: FSMContext):
-    await state.update_data(tariff=message.text)
+    tariff = message.text
+    await state.update_data(tariff=tariff)
     data = await state.get_data()
 
     text = (
@@ -89,19 +79,39 @@ async def process_tariff(message: types.Message, state: FSMContext):
     await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
     await state.clear()
 
-@dp.message(F.command("start"))
-async def cmd_start(message: types.Message, state: FSMContext):
+@dp.message(F.text.lower().in_({"❌ отменить", "/отменить"}))
+async def cancel(message: types.Message, state: FSMContext):
     await state.clear()
-    await state.set_state(Form.fio)
-    await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
+    await message.answer("🚫 Заявка отменена.", reply_markup=types.ReplyKeyboardRemove())
+
+@dp.message(F.text.lower().in_({"🔙 назад", "/назад"}))
+async def go_back(message: types.Message, state: FSMContext):
+    current = await state.get_state()
+    if current == Form.phone:
+        await state.set_state(Form.fio)
+        await message.answer("🔙 Введите ФИО:")
+    elif current == Form.company:
+        await state.set_state(Form.phone)
+        await message.answer("🔙 Введите номер телефона:")
+    elif current == Form.tariff:
+        await state.set_state(Form.company)
+        await message.answer("🔙 Введите название компании:")
+    else:
+        await message.answer("⏪ Назад недоступен.")
 
 # Webhook setup
 async def on_startup(bot: Bot):
-    await bot.set_webhook(f"{WEBHOOK_HOST}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
+    webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+    await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET)
 
 def create_app():
     app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET).register(app, path=WEBHOOK_PATH)
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=WEBHOOK_SECRET
+    ).register(app, path=WEBHOOK_PATH)
+
     setup_application(app, dp, bot=bot, on_startup=on_startup)
     return app
 
