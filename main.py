@@ -1,23 +1,26 @@
-from flask import Flask, request
-from telegram import Update, Bot
-from telegram.ext import Dispatcher, CommandHandler
 import os
+from flask import Flask, request
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 app = Flask(__name__)
-bot = Bot(token=os.getenv("BOT_TOKEN"))
-dispatcher = Dispatcher(bot, None, use_context=True)
+application = Application.builder().token(BOT_TOKEN).build()
 
-def start(update, context):
-    update.message.reply_text("Привет! Я живой.")
+# Обработка команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привет! Я живой.")
 
-dispatcher.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("start", start))
 
-@app.route('/')
-def home():
-    return 'Бот жив'
+@app.route("/")
+def index():
+    return "Бот работает!"
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
-    return 'ok'
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    if request.method == "POST":
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        await application.process_update(update)
+        return "ok"
