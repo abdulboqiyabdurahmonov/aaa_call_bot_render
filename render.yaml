@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: triplea-bot-web
+    name: triplea-telegram-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: ""
     startCommand: python main.py
     envVars:
       - key: BOT_TOKEN
-        value: 7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho
+        sync: false
