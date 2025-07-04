@@ -1,4 +1,2 @@
-uvicorn
-aiohttp
 aiogram==3.4.1
-fastapi  # если используешь
+aiohttp==3.9.5
