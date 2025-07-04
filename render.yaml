@@ -9,3 +9,4 @@ services:
       - key: 7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho
         sync: false
     autoDeploy: true
+
