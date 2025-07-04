@@ -14,7 +14,7 @@ GROUP_ID = -1002344973979
 
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-telegram-bot.onrender.com"
+WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
