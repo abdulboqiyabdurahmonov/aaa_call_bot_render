@@ -6,7 +6,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
-      - key: 7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho
-        sync: false
-    autoDeploy: true
-
+      - envVars:
+  - key: BOT_TOKEN
+    value: 7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho
+    sync: false
