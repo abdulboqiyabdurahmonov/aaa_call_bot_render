@@ -1,106 +1,98 @@
-from fastapi import FastAPI, Request
-import httpx
 import os
-
-app = FastAPI()
+import asyncio
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = os.getenv("GROUP_ID")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-user_states = {}
-user_data = {}
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+dp = Dispatcher(storage=MemoryStorage())
 
-@app.post("/webhook")
-async def telegram_webhook(request: Request):
-    data = await request.json()
+class Form(StatesGroup):
+    name = State()
+    phone = State()
+    company = State()
+    tariff = State()
 
-    if "message" in data:
-        message = data["message"]
+keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Оставить заявку")],
+        [KeyboardButton(text="Связаться с менеджером")]
+    ],
+    resize_keyboard=True
+)
 
-        # Игнорируем группы
-        if message["chat"]["type"] != "private":
-            return {"ok": True}
+tariff_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Старт (750 сум/звонок)")],
+        [KeyboardButton(text="Бизнес (600 сум/звонок)")],
+        [KeyboardButton(text="Корпоративный (450 сум/звонок до 100 000 звонков)")]
+    ],
+    resize_keyboard=True
+)
 
-        chat_id = message["chat"]["id"]
-        text = message.get("text", "")
+@dp.message(commands=["start", "отменить", "назад"])
+async def start(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Добро пожаловать! Выберите действие:", reply_markup=keyboard)
 
-        if text == "/start":
-            await send_message(chat_id, "Привет! Давайте оформим заявку.\n\nКак вас зовут?")
-            user_states[chat_id] = "waiting_name"
-            user_data[chat_id] = {}
-        else:
-            await handle_step(chat_id, text)
+@dp.message(lambda msg: msg.text == "Оставить заявку")
+async def start_form(message: types.Message, state: FSMContext):
+    await message.answer("Введите ваше ФИО:")
+    await state.set_state(Form.name)
 
-    elif "callback_query" in data:
-        callback = data["callback_query"]
-        chat_id = callback["from"]["id"]
-        tariff = callback["data"]
-        user_data[chat_id]["tariff"] = tariff
+@dp.message(Form.name)
+async def get_name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text)
+    await message.answer("Введите номер телефона:")
+    await state.set_state(Form.phone)
 
-        msg = format_application(user_data[chat_id])
-        await send_message(GROUP_ID, msg)
-        await send_message(chat_id, "Спасибо! Ваша заявка отправлена ✅")
+@dp.message(Form.phone)
+async def get_phone(message: types.Message, state: FSMContext):
+    await state.update_data(phone=message.text)
+    await message.answer("Введите название компании:")
+    await state.set_state(Form.company)
 
-        user_states.pop(chat_id, None)
-        user_data.pop(chat_id, None)
+@dp.message(Form.company)
+async def get_company(message: types.Message, state: FSMContext):
+    await state.update_data(company=message.text)
+    await message.answer("Выберите тариф:", reply_markup=tariff_keyboard)
+    await state.set_state(Form.tariff)
 
-    return {"ok": True}
-
-async def handle_step(chat_id, text):
-    state = user_states.get(chat_id)
-
-    if state == "waiting_name":
-        user_data[chat_id]["name"] = text
-        user_states[chat_id] = "waiting_phone"
-        await send_message(chat_id, "Введите номер телефона:")
-
-    elif state == "waiting_phone":
-        user_data[chat_id]["phone"] = text
-        user_states[chat_id] = "waiting_company"
-        await send_message(chat_id, "Введите название вашей компании:")
-
-    elif state == "waiting_company":
-        user_data[chat_id]["company"] = text
-        user_states[chat_id] = "waiting_tariff"
-        await send_tariff_buttons(chat_id)
-
-    else:
-        await send_message(chat_id, "Нажмите /start, чтобы начать заново.")
-
-async def send_tariff_buttons(chat_id):
-    keyboard = {
-        "inline_keyboard": [
-            [{"text": "🟢 Старт — до 1 000 звонков", "callback_data": "Старт"}],
-            [{"text": "🔵 Бизнес — до 10 000 звонков", "callback_data": "Бизнес"}],
-            [{"text": "🔴 Корпоративный — до 100 000 звонков", "callback_data": "Корпоративный"}]
-        ]
-    }
-
-    async with httpx.AsyncClient() as client:
-        await client.post(f"{API_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": "Выберите интересующий тариф:",
-            "reply_markup": keyboard
-        })
-
-def format_application(data):
-    return (
-        "📥 *Новая заявка*\n\n"
-        f"👤 *Имя:* {data.get('name')}\n"
-        f"📞 *Телефон:* {data.get('phone')}\n"
-        f"🏢 *Компания:* {data.get('company')}\n"
-        f"📦 *Тариф:* {data.get('tariff')}"
+@dp.message(Form.tariff)
+async def get_tariff(message: types.Message, state: FSMContext):
+    await state.update_data(tariff=message.text)
+    data = await state.get_data()
+    text = (
+        "<b>Заявка из Telegram-бота</b>\n\n"
+        f"<b>Имя:</b> {data['name']}\n"
+        f"<b>Телефон:</b> {data['phone']}\n"
+        f"<b>Компания:</b> {data['company']}\n"
+        f"<b>Тариф:</b> {data['tariff']}"
     )
+    await bot.send_message(chat_id=GROUP_ID, text=text)
+    await message.answer("Спасибо! Ваша заявка отправлена!", reply_markup=keyboard)
+    await state.clear()
 
-async def send_message(chat_id, text):
-    async with httpx.AsyncClient() as client:
-        await client.post(f"{API_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "Markdown"
-        })
+@dp.message(lambda msg: msg.text == "Связаться с менеджером")
+async def contact_manager(message: types.Message):
+    await message.answer("Менеджер свяжется с вами в ближайшее время.")
 
-@app.get("/")
-def root():
-    return {"status": "ok"}
+async def on_startup(app):
+    await bot.set_webhook("https://triplea-bot-web.onrender.com/webhook")
+
+app = web.Application()
+dp.include_router(dp)
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
+app.on_startup.append(on_startup)
+
+if __name__ == "__main__":
+    setup_application(app, dp, bot=bot)
+    web.run_app(app, port=8080)
