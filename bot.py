@@ -1,122 +1,110 @@
+import asyncio
 import logging
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.filters import Command, CommandStart
+
+API_TOKEN = '7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho'
+GROUP_ID = -1002344973979
+
+bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher(storage=MemoryStorage())
+
+# Шаги
+class Form(StatesGroup):
+    fio = State()
+    phone = State()
+    company = State()
+    tariff = State()
+
+# Кнопки тарифов
+tariff_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📦 Старт — 750 сум/звонок")],
+        [KeyboardButton(text="💼 Бизнес — 600 сум/звонок")],
+        [KeyboardButton(text="🏢 Корпоративный — 450 сум/звонок")],
+        [KeyboardButton(text="🔙 Назад"), KeyboardButton(text="❌ Отменить")]
+    ],
+    resize_keyboard=True
 )
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes,
-    MessageHandler, CallbackQueryHandler, ConversationHandler, filters
-)
 
-TOKEN = "7993696802:AAHsaOyLkComr4mr2WsC-EgnB5jcHKjd7Ho"
-GROUP_ID = -1002344973979  # <-- сюда вставь ID своей Telegram-группы
+# Старт
+@dp.message(CommandStart())
+async def cmd_start(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("👋 Привет! Давай соберем твою заявку. Введи, пожалуйста, своё ФИО:")
+    await state.set_state(Form.fio)
 
-logging.basicConfig(level=logging.INFO)
+# Отмена
+@dp.message(F.text.lower().in_({"❌ отменить", "/отменить"}))
+async def cancel(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🚫 Заявка отменена.", reply_markup=types.ReplyKeyboardRemove())
 
-(
-    GET_NAME,
-    GET_PHONE,
-    GET_COMPANY,
-    GET_TARIFF
-) = range(4)
+# Назад
+@dp.message(F.text.lower().in_({"🔙 назад", "/назад"}))
+async def go_back(message: Message, state: FSMContext):
+    current = await state.get_state()
+    if current == Form.phone:
+        await state.set_state(Form.fio)
+        await message.answer("🔙 Вернулись. Введите ФИО:")
+    elif current == Form.company:
+        await state.set_state(Form.phone)
+        await message.answer("🔙 Вернулись. Введите номер телефона:")
+    elif current == Form.tariff:
+        await state.set_state(Form.company)
+        await message.answer("🔙 Вернулись. Введите название компании:")
+    else:
+        await message.answer("⏪ Назад недоступен.")
 
-tariff_info = {
-    "Старт": "Для малого бизнеса и тестов\n• До 1 000 звонков в месяц\n• 1 голосовой сценарий\n• Поддержка в Telegram\n• Быстрый запуск\n💰 900 000 сум / мес",
-    "Бизнес": "Для растущих отделов продаж\n• До 10 000 звонков в месяц\n• До 5 сценариев\n• Поддержка и аналитика\n• Интеграция с Telegram-ботом\n💰 8 100 000 сум / мес",
-    "Корпоративный": "Для крупных проектов и сетей\n• До 100 000 звонков в месяц\n• Неограниченные сценарии\n• API-интеграция, CRM\n• Персональный менеджер\n💰 72 900 000 сум / мес"
-}
+# ФИО
+@dp.message(Form.fio)
+async def process_fio(message: Message, state: FSMContext):
+    await state.update_data(fio=message.text)
+    await state.set_state(Form.phone)
+    await message.answer("📞 Введите номер телефона:")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("Оставить заявку", callback_data="leave_request")],
-        [InlineKeyboardButton("Связаться с менеджером", callback_data="contact_manager")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "Привет! 👋\nВыберите, что хотите сделать:",
-        reply_markup=reply_markup
+# Телефон
+@dp.message(Form.phone)
+async def process_phone(message: Message, state: FSMContext):
+    await state.update_data(phone=message.text)
+    await state.set_state(Form.company)
+    await message.answer("🏢 Введите название компании:")
+
+# Компания
+@dp.message(Form.company)
+async def process_company(message: Message, state: FSMContext):
+    await state.update_data(company=message.text)
+    await state.set_state(Form.tariff)
+    await message.answer("📊 Выберите интересующий тариф:", reply_markup=tariff_keyboard)
+
+# Тариф
+@dp.message(Form.tariff)
+async def process_tariff(message: Message, state: FSMContext):
+    tariff = message.text
+    await state.update_data(tariff=tariff)
+    data = await state.get_data()
+
+    text = (
+        "📥 <b>Новая заявка из Telegram-бота</b>\n\n"
+        f"👤 <b>ФИО:</b> {data['fio']}\n"
+        f"📞 <b>Телефон:</b> {data['phone']}\n"
+        f"🏢 <b>Компания:</b> {data['company']}\n"
+        f"📦 <b>Тариф:</b> {data['tariff']}\n"
     )
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.data == "leave_request":
-        await query.message.reply_text("Пожалуйста, напишите ваше ФИО:")
-        return GET_NAME
-    elif query.data == "contact_manager":
-        await query.message.reply_text("Наш менеджер свяжется с вами в ближайшее время.")
-        return ConversationHandler.END
+    await bot.send_message(chat_id=GROUP_ID, text=text)
+    await message.answer("✅ Заявка отправлена! Наш менеджер скоро с вами свяжется.", reply_markup=types.ReplyKeyboardRemove())
+    await state.clear()
 
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["name"] = update.message.text
-    await update.message.reply_text("Теперь введите номер телефона:")
-    return GET_PHONE
-
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["phone"] = update.message.text
-    await update.message.reply_text("Введите название вашей компании:")
-    return GET_COMPANY
-
-async def get_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["company"] = update.message.text
-    keyboard = [
-        [InlineKeyboardButton("Старт", callback_data="Старт")],
-        [InlineKeyboardButton("Бизнес", callback_data="Бизнес")],
-        [InlineKeyboardButton("Корпоративный", callback_data="Корпоративный")]
-    ]
-    await update.message.reply_text("Выберите интересующий тариф:", reply_markup=InlineKeyboardMarkup(keyboard))
-    return GET_TARIFF
-
-async def get_tariff(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    tariff = query.data
-    context.user_data["tariff"] = tariff
-    message = (
-        "📥 Новая заявка\n\n"
-        f"👤 ФИО: {context.user_data['name']}\n"
-        f"📞 Телефон: {context.user_data['phone']}\n"
-        f"🏢 Компания: {context.user_data['company']}\n"
-        f"📦 Тариф: {tariff}\n\n"
-        f"ℹ️ Подробнее о тарифе:\n{tariff_info[tariff]}"
-    )
-    await context.bot.send_message(chat_id=GROUP_ID, text=message)
-    await query.message.reply_text("Спасибо! Ваша заявка отправлена менеджеру.")
-    return ConversationHandler.END
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Действие отменено. Введите /start для начала.")
-    return ConversationHandler.END
-
-async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Вы вернулись назад. Введите /start.")
-    return ConversationHandler.END
-
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(button_handler)],
-        states={
-            GET_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            GET_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            GET_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_company)],
-            GET_TARIFF: [CallbackQueryHandler(get_tariff)]
-        },
-        fallbacks=[
-            CommandHandler("отменить", cancel),
-            CommandHandler("назад", go_back)
-        ]
-    )
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(conv_handler)
-
-    # Webhook для Render (используй свой домен если есть)
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=10000,
-        webhook_url="https://<твоя-ссылка>.onrender.com"
-    )
+# Запуск
+async def main():
+    logging.basicConfig(level=logging.INFO)
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
