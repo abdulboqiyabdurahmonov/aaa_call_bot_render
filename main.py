@@ -13,7 +13,7 @@ API_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = -1002344973979
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
-WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
+WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"  # ← подставь точный Render-URL
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
@@ -99,7 +99,7 @@ async def process_tariff(message: types.Message, state: FSMContext):
     await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
     await state.clear()
 
-# Webhook setup
+# Webhook
 async def on_startup(bot: Bot):
     webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET)
@@ -114,4 +114,3 @@ def create_app():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     web.run_app(create_app(), port=8000)
-    fix: бот теперь реагирует на кнопки тарифов
