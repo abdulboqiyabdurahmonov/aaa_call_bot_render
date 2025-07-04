@@ -9,13 +9,15 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
-API_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = -1002344973979
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GROUP_ID = int(os.getenv("GROUP_ID", "-1002344973979"))
+
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "supersecret"
 WEBHOOK_HOST = "https://triplea-bot-web.onrender.com"
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
-bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
 class Form(StatesGroup):
@@ -24,83 +26,78 @@ class Form(StatesGroup):
     company = State()
     tariff = State()
 
+# Клавиатура тарифов с описанием
 tariff_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📦 Старт — 750 сум/звонок")],
-        [KeyboardButton(text="💼 Бизнес — 600 сум/звонок")],
-        [KeyboardButton(text="🏢 Корпоративный — 450 сум/звонок")],
-        [KeyboardButton(text="🔙 Назад"), KeyboardButton(text="❌ Отменить")]
+        [KeyboardButton(text="Старт")],
+        [KeyboardButton(text="Бизнес")],
+        [KeyboardButton(text="Корпоративный")]
     ],
-    resize_keyboard=True
+    resize_keyboard=True,
+    one_time_keyboard=True
 )
 
-@dp.message(F.command("start"))
+tariff_descriptions = {
+    "Старт": "🔹 750 сум/звонок\nВключает: отчётность, аналитику, поддержку, базовые функции",
+    "Бизнес": "🔸 600 сум/звонок\nВключает: отчётность, аналитику, расширенные функции, поддержку",
+    "Корпоративный": "🔶 450 сум/звонок\nВключает: всё, что в Бизнес + приоритетное обслуживание и API"
+}
+
+@dp.message(F.text == "/start")
 async def start(message: types.Message, state: FSMContext):
     await state.clear()
+    await message.answer("👋 Добро пожаловать! Введите ваше <b>ФИО</b>:")
     await state.set_state(Form.fio)
-    await message.answer("👋 Привет! Введи, пожалуйста, своё ФИО:")
 
 @dp.message(Form.fio)
-async def fio_handler(message: types.Message, state: FSMContext):
+async def process_fio(message: types.Message, state: FSMContext):
     await state.update_data(fio=message.text)
+    await message.answer("📞 Введите ваш <b>номер телефона</b>:")
     await state.set_state(Form.phone)
-    await message.answer("📞 Введите номер телефона:")
 
 @dp.message(Form.phone)
-async def phone_handler(message: types.Message, state: FSMContext):
+async def process_phone(message: types.Message, state: FSMContext):
     await state.update_data(phone=message.text)
+    await message.answer("🏢 Введите <b>название вашей компании</b>:")
     await state.set_state(Form.company)
-    await message.answer("🏢 Введите название компании:")
 
 @dp.message(Form.company)
-async def company_handler(message: types.Message, state: FSMContext):
+async def process_company(message: types.Message, state: FSMContext):
     await state.update_data(company=message.text)
+    await message.answer("📊 Выберите <b>тариф</b>:", reply_markup=tariff_keyboard)
     await state.set_state(Form.tariff)
-    await message.answer("📊 Выберите тариф:", reply_markup=tariff_keyboard)
 
 @dp.message(Form.tariff)
-async def tariff_handler(message: types.Message, state: FSMContext):
-    await state.update_data(tariff=message.text)
+async def process_tariff(message: types.Message, state: FSMContext):
+    tariff = message.text
+    if tariff not in tariff_descriptions:
+        await message.answer("❌ Пожалуйста, выберите тариф из списка.", reply_markup=tariff_keyboard)
+        return
+
+    await state.update_data(tariff=tariff)
     data = await state.get_data()
-    await bot.send_message(GROUP_ID, f"""📥 <b>Новая заявка из Telegram-бота</b>
 
-👤 <b>ФИО:</b> {data['fio']}
-📞 <b>Телефон:</b> {data['phone']}
-🏢 <b>Компания:</b> {data['company']}
-📦 <b>Тариф:</b> {data['tariff']}
-""", parse_mode=ParseMode.HTML)
-    await message.answer("✅ Заявка отправлена!", reply_markup=types.ReplyKeyboardRemove())
+    text = (
+        "📥 <b>Новая заявка</b>\n\n"
+        f"👤 Имя: {data['fio']}\n"
+        f"📞 Телефон: {data['phone']}\n"
+        f"🏢 Компания: {data['company']}\n"
+        f"💼 Тариф: {data['tariff']}\n"
+        f"ℹ️ Описание: {tariff_descriptions[tariff]}"
+    )
+
+    await bot.send_message(GROUP_ID, text)
+    await message.answer("✅ Спасибо! Ваша заявка отправлена менеджеру.")
     await state.clear()
 
-@dp.message(F.text.lower().in_({"❌ отменить", "/отменить"}))
-async def cancel(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("🚫 Заявка отменена.", reply_markup=types.ReplyKeyboardRemove())
+# Webhook и запуск
+async def on_startup(app):
+    await bot.set_webhook(WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
 
-@dp.message(F.text.lower().in_({"🔙 назад", "/назад"}))
-async def back(message: types.Message, state: FSMContext):
-    current = await state.get_state()
-    if current == Form.phone:
-        await state.set_state(Form.fio)
-        await message.answer("🔙 Введите ФИО:")
-    elif current == Form.company:
-        await state.set_state(Form.phone)
-        await message.answer("🔙 Введите номер телефона:")
-    elif current == Form.tariff:
-        await state.set_state(Form.company)
-        await message.answer("🔙 Введите название компании:")
-    else:
-        await message.answer("⏪ Назад недоступен.")
-
-async def on_startup(bot: Bot):
-    await bot.set_webhook(f"{WEBHOOK_HOST}{WEBHOOK_PATH}", secret_token=WEBHOOK_SECRET)
-
-def create_app():
-    app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET).register(app, path=WEBHOOK_PATH)
-    setup_application(app, dp, bot=bot, on_startup=on_startup)
-    return app
+app = web.Application()
+dp.workflow_data["bot"] = bot
+setup_application(app, dp, bot=bot, secret_token=WEBHOOK_SECRET)
+app.on_startup.append(on_startup)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    web.run_app(create_app(), port=8000)
+    web.run_app(app, host="0.0.0.0", port=10000)
